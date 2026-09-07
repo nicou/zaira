@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 from zaira.jira_client import format_jira_error, get_jira
 from zaira.project import get_max_hours_per_day
+from zaira.terminal import ticket_key, ticket_key_cell
 from zaira.types import get_user_identifier
 
 
@@ -140,7 +141,7 @@ def format_ticket_hours(
         subtotal = sum(author_hours.values())
         grand_total += subtotal
 
-        lines.append(f"\n{key}: {summary}")
+        lines.append(f"\n{ticket_key(key)}: {summary}")
         for author, hours in sorted(author_hours.items(), key=lambda x: -x[1]):
             lines.append(f"  {author:<40} {hours:.1f}h")
         lines.append(f"  {'Subtotal:':<40} {subtotal:.1f}h")
@@ -218,7 +219,9 @@ def format_hours(
             lines.append(f"\n{date} ({day_name})  [{day_total:.1f}h]")
             for key, summary, hours, comment in daily[date]:
                 comment_str = f"  ({comment})" if comment else ""
-                lines.append(f"  {key:<12} {hours:.1f}h  {summary}{comment_str}")
+                lines.append(
+                    f"  {ticket_key_cell(key, 12)} {hours:.1f}h  {summary}{comment_str}"
+                )
 
     grand_total = sum(ticket_totals.values())
     lines.append(f"\n{'=' * 50}")
@@ -226,7 +229,7 @@ def format_hours(
     if ticket_totals:
         lines.append("\nBy ticket:")
         for key, hours in sorted(ticket_totals.items(), key=lambda x: -x[1]):
-            lines.append(f"  {key:<12} {hours:.1f}h")
+            lines.append(f"  {ticket_key_cell(key, 12)} {hours:.1f}h")
 
     if show_missing:
         max_hours = get_max_hours_per_day()

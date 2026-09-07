@@ -4,6 +4,7 @@ import argparse
 import sys
 
 from zaira.jira_client import format_jira_error, get_jira
+from zaira.terminal import ticket_key_cell
 from zaira.types import MyTicket
 from zaira.util import humanize_age
 
@@ -75,7 +76,8 @@ def print_table(tickets: list[MyTicket]) -> None:
             max_summary = 100
             if len(summary) > max_summary:
                 summary = summary[: max_summary - 3] + "..."
-            print(f"{t['key']:<{key_width}}  {age:>5}  {summary}")
+            key_cell = ticket_key_cell(t["key"], key_width)
+            print(f"{key_cell}  {age:>5}  {summary}")
 
 
 def my_command(args: argparse.Namespace) -> None:

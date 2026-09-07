@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from zaira import activity_log, confluence_api, jira_client
+from zaira import activity_log, confluence_api, jira_client, terminal
 
 
 @pytest.fixture(autouse=True)
@@ -23,6 +23,14 @@ def isolated_activity_log(
     monkeypatch.setattr(activity_log, "LOG_FILE", log_dir / "activity.log")
     monkeypatch.setattr(activity_log, "_token_fp", lambda: "test0000")
     yield log_dir / "activity.log"
+
+
+@pytest.fixture(autouse=True)
+def reset_terminal_cache() -> Iterator[None]:
+    """Keep cached hyperlink detection from leaking between tests."""
+    terminal.reset_cache()
+    yield
+    terminal.reset_cache()
 
 
 @pytest.fixture

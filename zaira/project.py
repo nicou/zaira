@@ -66,3 +66,20 @@ def get_max_hours_per_day() -> float:
         if value is not None:
             return float(value)
     return 7.5
+
+
+def get_hyperlinks_mode() -> str:
+    """Get the terminal hyperlink mode from config.toml, default "auto".
+
+    "auto" detects terminal support, "always" forces links on, "never" turns
+    them off. An unknown value falls back to "auto".
+    """
+    from zaira.jira_client import CONFIG_FILE
+
+    if CONFIG_FILE.exists():
+        with open(CONFIG_FILE, "rb") as f:
+            config = tomllib.load(f)
+        value = config.get("terminal", {}).get("hyperlinks")
+        if value in ("auto", "always", "never"):
+            return str(value)
+    return "auto"

@@ -5,6 +5,7 @@ import json
 from datetime import datetime, timezone
 
 from zaira.jira_client import CACHE_DIR, current_token_fingerprint
+from zaira.terminal import ticket_key
 
 LOG_FILE = CACHE_DIR / "activity.log"
 
@@ -97,6 +98,8 @@ def format_entries(entries: list[dict]) -> str:
         detail_str = f"  {detail}" if detail else ""
         token = e.get("token")
         token_str = f"  [token {token}]" if token else ""
-        lines.append(f"{ts_display}  {op:<12s}  {key}{detail_str}{token_str}")
+        lines.append(
+            f"{ts_display}  {op:<12s}  {ticket_key(key)}{detail_str}{token_str}"
+        )
 
     return "\n".join(lines)

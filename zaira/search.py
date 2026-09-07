@@ -7,6 +7,7 @@ from typing import Any
 from zaira.export import extract_custom_field_value
 from zaira.info import get_field_id
 from zaira.jira_client import get_jira
+from zaira.terminal import ticket_key_cell
 from zaira.types import SearchResult
 from zaira.util import humanize_age
 
@@ -150,7 +151,8 @@ def print_row(
     if len(summary) > 90:
         summary = summary[:87] + "..."
     status_short = status[:15]
-    print(f"{key:<{key_width}}  {status_short:<15}  {age:>5}  {summary}")
+    key_cell = ticket_key_cell(key, key_width)
+    print(f"{key_cell}  {status_short:<15}  {age:>5}  {summary}")
 
 
 def print_row_with_fields(
@@ -165,7 +167,7 @@ def print_row_with_fields(
     """Print a search result row with extra field columns."""
     age = humanize_age(created)
     status_short = status[:15]
-    parts = [f"{key:<{key_width}}", f"{status_short:<15}", f"{age:>5}"]
+    parts = [ticket_key_cell(key, key_width), f"{status_short:<15}", f"{age:>5}"]
     for val, width in zip(extra_values, col_widths):
         if len(val) > width:
             val = val[: width - 3] + "..."

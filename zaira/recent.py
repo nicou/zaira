@@ -13,6 +13,7 @@ from zaira.jira_client import (
     get_server_from_config,
     load_credentials,
 )
+from zaira.terminal import ticket_key_cell
 
 JIRA_RECENT_JQL = "issuekey in issueHistory() ORDER BY lastViewed DESC"
 
@@ -45,7 +46,8 @@ def recent_command(args: argparse.Namespace) -> None:
         status = issue.fields.status.name if issue.fields.status else "?"
         if len(summary) > 90:
             summary = summary[:87] + "..."
-        print(f"{issue.key:<{key_width}}  {status[:15]:<15}  {summary}")
+        key_cell = ticket_key_cell(issue.key, key_width)
+        print(f"{key_cell}  {status[:15]:<15}  {summary}")
 
 
 def wiki_recent_command(args: argparse.Namespace) -> None:

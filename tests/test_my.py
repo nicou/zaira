@@ -101,6 +101,22 @@ class TestPrintTable:
         # Should not contain full 150 A's
         assert "A" * 150 not in captured.out
 
+    def test_no_escape_sequences_when_piped(self, capsys) -> None:
+        """Piped output stays plain, so scripts and agents see the bare key."""
+        tickets: list[MyTicket] = [
+            MyTicket(
+                key="TEST-1",
+                status="Open",
+                created="2024-01-01",
+                summary="First",
+            )
+        ]
+
+        print_table(tickets)
+
+        captured = capsys.readouterr()
+        assert "\033" not in captured.out
+
     def test_sorts_by_created_date(self, capsys) -> None:
         """Sorts tickets by created date within groups."""
         tickets: list[MyTicket] = [

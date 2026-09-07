@@ -41,7 +41,26 @@ Get your API token from: https://id.atlassian.com/manage-profile/security/api-to
 
 Use `zaira init --set-token` to replace a stored token. If you prefer the old behaviour, you can still put `api_token = "..."` directly in `credentials.toml`; it will be used in preference to the keyring.
 
-### 2. Initialize project (optional, for project managers)
+### 2. Optional settings
+
+`zaira init` also creates `config.toml` next to the credentials file. It holds settings that are not credentials:
+
+```toml
+[worklog]
+# Max hours per day for 'zaira log --spread'
+max_hours_per_day = 7.5
+
+[terminal]
+# Clickable ticket keys in listings, for terminals that render OSC 8 links.
+# "auto" detects support, "always" forces links on, "never" turns them off.
+hyperlinks = "auto"
+```
+
+With `hyperlinks = "auto"`, ticket keys in `my`, `search`, `recent`, `hours` and `history` become clickable in terminals that support OSC 8 links (Ghostty, kitty, iTerm2, WezTerm, Konsole, Windows Terminal, GNOME Terminal, foot). The key still prints as plain text — a CMD-click or CTRL-click opens the ticket in the browser.
+
+Detection is an allow list, because a terminal cannot be asked whether it supports the sequence. Piped or redirected output never gets escape sequences, so scripts and agents always read the bare key. Use `"always"` if your terminal supports links but is not detected, and `"never"` to turn the feature off.
+
+### 3. Initialize project (optional, for project managers)
 
 For advanced workflows with named queries, report templates, and board aliases, generate `zproject.toml`:
 
@@ -246,6 +265,8 @@ zaira my
 ```
 
 Tickets are sorted by age (oldest first) within each group. Uses the `my-tickets` query from `zproject.toml` if configured, otherwise defaults to `assignee = currentUser() AND status NOT IN (Done, Closed, Resolved, Disposal, Rejected)`.
+
+Ticket keys are clickable in terminals that support OSC 8 links — see [Optional settings](#2-optional-settings).
 
 ### report
 

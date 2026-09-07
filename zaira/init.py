@@ -245,6 +245,11 @@ def _create_config_file() -> None:
 [worklog]
 # Max hours per day for 'zaira log --spread'
 max_hours_per_day = 7.5
+
+[terminal]
+# Clickable ticket keys in listings, for terminals that render OSC 8 links.
+# "auto" detects support, "always" forces links on, "never" turns them off.
+hyperlinks = "auto"
 """
     CONFIG_FILE.write_text(template)
 
