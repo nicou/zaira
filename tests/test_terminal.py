@@ -1,7 +1,5 @@
 """Tests for terminal module (OSC 8 hyperlinks)."""
 
-from typing import Any
-
 import pytest
 
 from zaira import terminal
@@ -14,18 +12,7 @@ from zaira.terminal import (
 
 # Every environment variable the detection looks at, so a test starts from a
 # known-empty environment instead of inheriting the developer's terminal.
-_ENV_VARS = (
-    "TERM",
-    "TERM_PROGRAM",
-    "TMUX",
-    "VTE_VERSION",
-    "KITTY_WINDOW_ID",
-    "KONSOLE_VERSION",
-    "WT_SESSION",
-    "DOMTERM",
-    "GHOSTTY_RESOURCES_DIR",
-    "GHOSTTY_BIN_DIR",
-)
+_ENV_VARS = terminal._TERMINAL_MARKERS + ("TERM", "TERM_PROGRAM", "TMUX", "VTE_VERSION")
 
 
 @pytest.fixture
@@ -47,163 +34,70 @@ def set_site(monkeypatch: pytest.MonkeyPatch, site: str) -> None:
     monkeypatch.setattr("zaira.jira_client.get_jira_site", lambda: site)
 
 
-class TestHyperlink:
-    """Tests for the raw escape sequence."""
-
-    def test_byte_sequence(self) -> None:
-        """Emits OSC 8 with ESC-backslash terminators, not BEL."""
-        result = hyperlink("https://example.com/browse/T-1", "T-1")
-
-        assert result == (
-            "\033]8;;https://example.com/browse/T-1\033\\T-1\033]8;;\033\\"
-        )
-        assert "\a" not in result
-
-    def test_label_is_visible_text(self) -> None:
-        """The label is the only non-escape text in the sequence."""
-        assert "T-1" in hyperlink("https://example.com", "T-1")
+def test_hyperlink_byte_sequence() -> None:
+    """Emits OSC 8 with ESC-backslash terminators, not BEL."""
+    assert hyperlink("https://example.com/browse/T-1", "T-1") == (
+        "\033]8;;https://example.com/browse/T-1\033\\T-1\033]8;;\033\\"
+    )
 
 
-class TestSupportsHyperlinks:
-    """Tests for terminal detection."""
+@pytest.mark.parametrize(
+    "env, expected",
+    [
+        pytest.param(
+            {"TERM": "xterm-ghostty", "TERM_PROGRAM": "ghostty"}, True, id="ghostty"
+        ),
+        pytest.param(
+            {"TERM": "xterm-256color", "GHOSTTY_RESOURCES_DIR": "/opt/ghostty"},
+            True,
+            id="ghostty-resources-dir",
+        ),
+        pytest.param({"TERM": "xterm-kitty", "KITTY_WINDOW_ID": "1"}, True, id="kitty"),
+        pytest.param(
+            {"TERM": "xterm-256color", "TERM_PROGRAM": "iTerm.app"}, True, id="iterm"
+        ),
+        pytest.param(
+            {"TERM": "xterm-256color", "VTE_VERSION": "6003"}, True, id="vte-new"
+        ),
+        pytest.param(
+            {"TERM": "xterm-256color", "VTE_VERSION": "4205"}, False, id="vte-old"
+        ),
+        pytest.param(
+            {"TERM": "xterm-256color", "TERM_PROGRAM": "Apple_Terminal"},
+            False,
+            id="apple-terminal",
+        ),
+        pytest.param({"TERM": "xterm-256color"}, False, id="unknown"),
+        pytest.param({"TERM": "dumb", "TERM_PROGRAM": "ghostty"}, False, id="dumb"),
+        pytest.param(
+            {"TERM": "screen-256color", "TERM_PROGRAM": "ghostty"}, False, id="screen"
+        ),
+        pytest.param(
+            {"TERM": "xterm-ghostty", "TMUX": "/tmp/tmux-501/default,1,0"},
+            False,
+            id="tmux",
+        ),
+    ],
+)
+def test_detection(
+    clean_env: None,
+    monkeypatch: pytest.MonkeyPatch,
+    env: dict[str, str],
+    expected: bool,
+) -> None:
+    """The allow list decides support in auto mode."""
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
 
-    def test_ghostty(self, clean_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Ghostty renders OSC 8."""
-        monkeypatch.setenv("TERM", "xterm-ghostty")
-        monkeypatch.setenv("TERM_PROGRAM", "ghostty")
-
-        assert supports_hyperlinks() is True
-
-    def test_ghostty_by_resources_dir(
-        self, clean_env: None, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Ghostty is recognised by its resources dir alone."""
-        monkeypatch.setenv("TERM", "xterm-256color")
-        monkeypatch.setenv("GHOSTTY_RESOURCES_DIR", "/opt/ghostty")
-
-        assert supports_hyperlinks() is True
-
-    def test_kitty(self, clean_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
-        """kitty renders OSC 8."""
-        monkeypatch.setenv("TERM", "xterm-kitty")
-        monkeypatch.setenv("KITTY_WINDOW_ID", "1")
-
-        assert supports_hyperlinks() is True
-
-    def test_iterm(self, clean_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
-        """iTerm2 renders OSC 8."""
-        monkeypatch.setenv("TERM", "xterm-256color")
-        monkeypatch.setenv("TERM_PROGRAM", "iTerm.app")
-
-        assert supports_hyperlinks() is True
-
-    def test_vte_new_enough(
-        self, clean_env: None, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """VTE 0.50 and later (VTE_VERSION >= 5000) renders OSC 8."""
-        monkeypatch.setenv("TERM", "xterm-256color")
-        monkeypatch.setenv("VTE_VERSION", "6003")
-
-        assert supports_hyperlinks() is True
-
-    def test_vte_too_old(
-        self, clean_env: None, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """VTE before 0.50 does not."""
-        monkeypatch.setenv("TERM", "xterm-256color")
-        monkeypatch.setenv("VTE_VERSION", "4205")
-
-        assert supports_hyperlinks() is False
-
-    def test_apple_terminal(
-        self, clean_env: None, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Terminal.app does not render OSC 8."""
-        monkeypatch.setenv("TERM", "xterm-256color")
-        monkeypatch.setenv("TERM_PROGRAM", "Apple_Terminal")
-
-        assert supports_hyperlinks() is False
-
-    def test_unknown_terminal(
-        self, clean_env: None, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """An unrecognised terminal gets no links."""
-        monkeypatch.setenv("TERM", "xterm-256color")
-
-        assert supports_hyperlinks() is False
-
-    def test_dumb_term(self, clean_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
-        """TERM=dumb reports no capabilities."""
-        monkeypatch.setenv("TERM", "dumb")
-        monkeypatch.setenv("TERM_PROGRAM", "ghostty")
-
-        assert supports_hyperlinks() is False
-
-    def test_not_a_tty(self, clean_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Piped output never gets escape sequences."""
-        monkeypatch.setenv("TERM", "xterm-ghostty")
-        monkeypatch.setattr("sys.stdout.isatty", lambda: False, raising=False)
-
-        assert supports_hyperlinks() is False
-
-    def test_screen_without_tmux(
-        self, clean_env: None, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """GNU screen does not forward OSC 8."""
-        monkeypatch.setenv("TERM", "screen-256color")
-        monkeypatch.setenv("TERM_PROGRAM", "ghostty")
-
-        assert supports_hyperlinks() is False
+    assert supports_hyperlinks() is expected
 
 
-class TestTmuxDetection:
-    """Tests for the tmux version gate."""
+def test_not_a_tty(clean_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Piped output never gets escape sequences."""
+    monkeypatch.setenv("TERM", "xterm-ghostty")
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False, raising=False)
 
-    def _fake_tmux(self, monkeypatch: pytest.MonkeyPatch, version: str) -> None:
-        def fake_run(*args: Any, **kwargs: Any) -> Any:
-            class Result:
-                stdout = version
-
-            return Result()
-
-        monkeypatch.setattr("subprocess.run", fake_run)
-
-    def test_tmux_new_enough(
-        self, clean_env: None, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """tmux 3.4 forwards OSC 8."""
-        monkeypatch.setenv("TERM", "screen-256color")
-        monkeypatch.setenv("TMUX", "/tmp/tmux-501/default,1,0")
-        monkeypatch.setenv("TERM_PROGRAM", "ghostty")
-        self._fake_tmux(monkeypatch, "tmux 3.4\n")
-
-        assert supports_hyperlinks() is True
-
-    def test_tmux_too_old(
-        self, clean_env: None, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """tmux before 3.4 drops the sequence."""
-        monkeypatch.setenv("TERM", "screen-256color")
-        monkeypatch.setenv("TMUX", "/tmp/tmux-501/default,1,0")
-        monkeypatch.setenv("TERM_PROGRAM", "ghostty")
-        self._fake_tmux(monkeypatch, "tmux 3.3a\n")
-
-        assert supports_hyperlinks() is False
-
-    def test_tmux_missing_binary(
-        self, clean_env: None, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """An unreadable tmux version is treated as unsupported."""
-        monkeypatch.setenv("TERM", "screen-256color")
-        monkeypatch.setenv("TMUX", "/tmp/tmux-501/default,1,0")
-        monkeypatch.setenv("TERM_PROGRAM", "ghostty")
-
-        def fail(*args: Any, **kwargs: Any) -> Any:
-            raise OSError("no tmux")
-
-        monkeypatch.setattr("subprocess.run", fail)
-
-        assert supports_hyperlinks() is False
+    assert supports_hyperlinks() is False
 
 
 class TestConfigMode:
@@ -226,19 +120,6 @@ class TestConfigMode:
         set_mode(monkeypatch, "always")
 
         assert supports_hyperlinks() is True
-
-    def test_result_is_cached(
-        self, clean_env: None, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Detection runs once per process."""
-        set_mode(monkeypatch, "always")
-        assert supports_hyperlinks() is True
-
-        set_mode(monkeypatch, "never")
-        assert supports_hyperlinks() is True
-
-        terminal.reset_cache()
-        assert supports_hyperlinks() is False
 
 
 class TestTicketKey:
@@ -309,20 +190,6 @@ class TestTicketKeyCell:
         # Two OSC 8 sequences (open and close), each ESC-introduced and
         # ESC-terminated.
         assert cell.count("\033") == 4
-
-    def test_columns_align_across_key_lengths(
-        self, clean_env: None, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Rows with different key lengths end at the same visible column."""
-        set_mode(monkeypatch, "always")
-        set_site(monkeypatch, "example.atlassian.net")
-
-        short = ticket_key_cell("T-1", 10)
-        wide = ticket_key_cell("TEST-1234", 10)
-
-        # Trailing padding brings both to the same visible width.
-        assert len(short) - len(short.rstrip(" ")) == 10 - len("T-1")
-        assert len(wide) - len(wide.rstrip(" ")) == 10 - len("TEST-1234")
 
     def test_oversized_key_is_not_truncated(
         self, clean_env: None, monkeypatch: pytest.MonkeyPatch

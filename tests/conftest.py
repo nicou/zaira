@@ -28,9 +28,11 @@ def isolated_activity_log(
 @pytest.fixture(autouse=True)
 def reset_terminal_cache() -> Iterator[None]:
     """Keep cached hyperlink detection from leaking between tests."""
-    terminal.reset_cache()
+    terminal.supports_hyperlinks.cache_clear()
+    terminal._jira_site.cache_clear()
     yield
-    terminal.reset_cache()
+    terminal.supports_hyperlinks.cache_clear()
+    terminal._jira_site.cache_clear()
 
 
 @pytest.fixture

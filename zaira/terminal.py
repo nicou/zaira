@@ -8,9 +8,9 @@ get the bare key: some old terminals print the raw escape bytes instead of
 dropping them, and piped output must stay byte-identical for scripts and agents.
 """
 
+import functools
 import os
 import re
-import subprocess
 import sys
 
 ESC = "\033"
@@ -19,9 +19,6 @@ ST = f"{ESC}\\"
 # VTE added OSC 8 in 0.50, which reports VTE_VERSION 5000 or higher.
 MIN_VTE_VERSION = 5000
 
-# tmux forwards OSC 8 from 3.4. Older versions drop it or pass fragments.
-MIN_TMUX_VERSION = (3, 4)
-
 # Environment variables that a terminal with OSC 8 support sets.
 _TERMINAL_MARKERS = (
     "KITTY_WINDOW_ID",
@@ -29,56 +26,21 @@ _TERMINAL_MARKERS = (
     "WT_SESSION",
     "DOMTERM",
     "GHOSTTY_RESOURCES_DIR",
-    "GHOSTTY_BIN_DIR",
 )
 
 _TERM_SUBSTRINGS = ("kitty", "foot", "ghostty", "wezterm", "contour", "rio")
 
 # Apple_Terminal is absent on purpose: Terminal.app does not render OSC 8.
-_TERM_PROGRAMS = (
-    "iTerm.app",
-    "WezTerm",
-    "ghostty",
-    "vscode",
-    "Hyper",
-    "rio",
-    "Tabby",
-    "mintty",
-)
+_TERM_PROGRAMS = ("iTerm.app", "vscode", "Hyper", "rio", "Tabby", "mintty")
 
 # A Jira issue key: project key, a dash, then the issue number. Anything else
 # (a column header, a "?" placeholder) must not become a browse URL.
 _KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]*-\d+$")
 
-_supported: bool | None = None
-_site: str | None = None
 
-
-def reset_cache() -> None:
-    """Drop the cached support result and Jira site."""
-    global _supported, _site
-    _supported = None
-    _site = None
-
-
-def _tmux_forwards_hyperlinks() -> bool:
-    """Check whether the running tmux is new enough to forward OSC 8."""
-    try:
-        out = subprocess.run(
-            ["tmux", "-V"], capture_output=True, text=True, timeout=2, check=False
-        ).stdout
-    except (OSError, subprocess.SubprocessError):
-        return False
-    digits = "".join(c for c in out if c.isdigit() or c == ".")
-    parts = [p for p in digits.split(".") if p]
-    if not parts:
-        return False
-    version = tuple(int(p) for p in parts[:2])
-    return version >= MIN_TMUX_VERSION
-
-
-def _detect_support() -> bool:
-    """Decide whether stdout can render OSC 8 hyperlinks."""
+@functools.cache
+def supports_hyperlinks() -> bool:
+    """Return True if stdout renders OSC 8 hyperlinks. Cached."""
     from zaira.project import get_hyperlinks_mode
 
     mode = get_hyperlinks_mode()
@@ -94,11 +56,9 @@ def _detect_support() -> bool:
     if term in ("", "dumb"):
         return False
 
-    if os.environ.get("TMUX"):
-        if not _tmux_forwards_hyperlinks():
-            return False
-    elif term.startswith("screen"):
-        # GNU screen does not forward OSC 8.
+    # GNU screen and tmux do not reliably forward OSC 8. tmux 3.4+ users can
+    # set hyperlinks = "always".
+    if os.environ.get("TMUX") or term.startswith("screen"):
         return False
 
     vte = os.environ.get("VTE_VERSION", "")
@@ -114,26 +74,16 @@ def _detect_support() -> bool:
     return os.environ.get("TERM_PROGRAM", "") in _TERM_PROGRAMS
 
 
-def supports_hyperlinks() -> bool:
-    """Return True if stdout renders OSC 8 hyperlinks. Cached."""
-    global _supported
-    if _supported is None:
-        _supported = _detect_support()
-    return _supported
-
-
+@functools.cache
 def _jira_site() -> str:
     """Return the Jira site for browse URLs. Cached.
 
     get_jira_site() reads credentials.toml and can hit the OS keyring, so it
     must not run once per printed row.
     """
-    global _site
-    if _site is None:
-        from zaira.jira_client import get_jira_site
+    from zaira.jira_client import get_jira_site
 
-        _site = get_jira_site()
-    return _site
+    return get_jira_site()
 
 
 def hyperlink(url: str, label: str) -> str:
